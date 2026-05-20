@@ -4,29 +4,35 @@ TrimLink is a production-grade, highly available, fault-tolerant distributed URL
 
 ## 🚀 System Architecture Overview
 
-[ Client Request ]
-                            │
-                            ▼
-               ┌─────────────────────────┐
-               │   API Gateway Layer     │ (Port 8080)
-               │  └─ Sliding Window RL   │
-               │  └─ Murmur3 Hash Ring   │
-               └────────────┬────────────┘
-                            │
-           ┌────────────────┴────────────────┐
-           ▼ (Routed via Consistent Hashing) ▼
- ┌───────────────────┐             ┌───────────────────┐
- │  App Node 1...5   │             │  App Node 6...10  │ (Ports 8081-8090)
- └─────────┬─────────┘             └─────────┬─────────┘
-           │                                 │
-           ├─────────────────────────────────┤
-           ▼                                 ▼
-┌───────────────────────┐         ┌───────────────────────┐
-│ Apache ZooKeeper KGS  │         │  Redis Cache Cluster  │
-│  (Atomic ID Leases)   │         │    (L1 Cache-Aside)   │
-└───────────────────────┘         └───────────────────────┘
-│
-▼
+   [ Client Request ]
+          │
+          ▼
+┌─────────────────────────┐
+│   API Gateway Layer     │ (Port 8080)
+│  └─ Sliding Window RL   │
+│  └─ Murmur3 Hash Ring   │
+└────────────┬────────────┘
+             │
+ ┌──────────┴──────────────┐
+ ▼ (Routed via Consistent Hashing) ▼
+ ┌───────────────────┐            
+ │  App Node 1...10  │  
+ └─────────┬─────────┘            
+           │                                
+           ├
+           ▼                     
+┌───────────────────────┐        
+│ Apache ZooKeeper KGS  │        
+│  (Atomic ID Leases)   │         
+└───────────────────────┘         
+          │
+          ▼
+┌───────────────────────┐
+│  Redis Cache Cluster  │
+│    (L1 Cache-Aside)   │
+└───────────────────────┘
+          │
+          ▼
 ┌───────────────────────┐
 │ PostgreSQL Datastore  │
 │  (L2 Persistent Row)  │
