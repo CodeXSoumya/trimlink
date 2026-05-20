@@ -2,43 +2,6 @@
 
 TrimLink is a production-grade, highly available, fault-tolerant distributed URL shortener designed to handle massive concurrent write and read traffic. Built using a multi-node Spring Boot cluster orchestrated inside Docker, the system implements core distributed systems concepts—including Consistent Hashing, Sliding Window Rate Limiting, a Centralized Distributed Key Generation Service (KGS), and multi-tier Cache-Aside persistence.
 
-## 🚀 System Architecture Overview
-
-   [ Client Request ]
-          │
-          ▼
-┌─────────────────────────┐
-│   API Gateway Layer     │ (Port 8080)
-│  └─ Sliding Window RL   │
-│  └─ Murmur3 Hash Ring   │
-└────────────┬────────────┘
-             │
- ┌──────────┴──────────────┐
- ▼ (Routed via Consistent Hashing) ▼
- ┌───────────────────┐            
- │  App Node 1...10  │  
- └─────────┬─────────┘            
-           │                                
-           ├
-           ▼                     
-┌───────────────────────┐        
-│ Apache ZooKeeper KGS  │        
-│  (Atomic ID Leases)   │         
-└───────────────────────┘         
-          │
-          ▼
-┌───────────────────────┐
-│  Redis Cache Cluster  │
-│    (L1 Cache-Aside)   │
-└───────────────────────┘
-          │
-          ▼
-┌───────────────────────┐
-│ PostgreSQL Datastore  │
-│  (L2 Persistent Row)  │
-└───────────────────────┘
-
-
 ### Key Architectural Patterns Implemented:
 * **API Gateway & Layer-7 Routing:** Acts as the cluster single-entry point. Protects backend infrastructure via a custom custom **Sliding Window Rate Limiter** and proxies requests dynamically.
 * **Consistent Hashing (Murmur3):** Eliminates hot-spotting. The gateway maps destination long URLs across a virtual token ring containing 10 separate application node containers, ensuring static data partitioning.
