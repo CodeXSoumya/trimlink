@@ -126,47 +126,29 @@ for ($i = 1; $i -le 110; $i++) {
 
 ## Development On Company Laptop Without Java Or Docker
 
-You can still develop productively by using remote/CI validation.
+You can still develop productively with an editor-first workflow and occasional remote runtime access.
 
 1. Keep coding locally (editor only).
 1. Push frequently to a branch.
-1. Use GitHub Actions for build, test, and integration checks in cloud runners.
-1. Review logs and artifacts from CI for feedback.
-1. Optionally use a free cloud dev environment (GitHub Codespaces monthly free quota for personal account tiers that include it, or Gitpod alternatives) when full runtime testing is needed.
+1. Use a free cloud dev environment (GitHub Codespaces monthly free quota for personal account tiers that include it, or Gitpod alternatives) when full runtime testing is needed.
+1. Validate core flows with curl smoke tests against a running environment.
 
 Recommended testing split:
 
 1. Unit tests for pure logic classes (Base62, hashing, rate limiter logic).
-1. Integration tests for persistence and Redis behavior using Testcontainers in CI.
-1. End-to-end smoke test using docker compose in CI.
+1. Integration tests for persistence and Redis behavior using Testcontainers.
+1. End-to-end smoke test using docker compose.
 
-## Pull Request CI Pipeline
+## Free-Tier Distributed Deployment
 
-GitHub Actions workflow is available at .github/workflows/pr-ci.yml and runs on every pull request to main/master.
+A step-by-step guide for deploying the full distributed architecture (gateway, app node(s), ZooKeeper, Redis, and 3 Postgres shards) is available at [docs/free-tier-distributed-deployment.md](docs/free-tier-distributed-deployment.md).
 
-Stages:
+Environment variable template for cloud secrets is available at [.env.free-tier.example](.env.free-tier.example).
 
-1. Frontend job
-1. npm ci
-1. npm run lint
-1. npm run build
+Fly.io role-based templates are available at [deploy/fly/node.fly.toml](deploy/fly/node.fly.toml) and [deploy/fly/gateway.fly.toml](deploy/fly/gateway.fly.toml).
 
-1. Backend job
-1. Maven test
-1. Maven package
+For Valkey-first deployment without ZooKeeper, set:
 
-1. Compose smoke job
-1. docker compose up --build
-1. frontend availability check on port 3000
-1. backend shorten and resolve smoke flow verification
-1. logs on failure and teardown
-
-PR feedback:
-
-1. Workflow automatically posts (and updates) a single sticky PR comment with stage status:
-1. frontend
-1. backend
-1. smoke
-1. Direct link to the workflow run is included for quick triage.
-
-This ensures that merged code is always in a deployable state.
+1. `TRIMLINK_ZOOKEEPER_ENABLED=false`
+2. `TRIMLINK_KGS_PROVIDER=redis`
+3. `TRIMLINK_GATEWAY_STATIC_NODES=<comma-separated-app-node-hosts>`
