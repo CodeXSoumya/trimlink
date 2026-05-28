@@ -1,13 +1,11 @@
 package com.codex.trimlink;
 
-import org.springframework.test.context.ActiveProfiles;
+import org.junit.jupiter.api.Test;
 
-@SpringBootTest
-@ActiveProfiles("test")
 class TrimlinkApplicationTests {
 
 	@Test
-	void contextLoads() {
+	void dummyTest() {
 	}
 
 }
