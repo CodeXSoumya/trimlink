@@ -42,5 +42,5 @@ export async function createShortCode(
 }
 
 export function resolveShortCodeUrl(shortCode: string): string {
-  return `${apiBaseUrl}/resolve/${encodeURIComponent(shortCode)}`;
+  return `${apiBaseUrl}/${encodeURIComponent(shortCode)}`;
 }

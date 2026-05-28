@@ -1,9 +1,14 @@
 package com.codex.trimlink.gateway;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import org.apache.curator.framework.CuratorFramework;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,17 +21,25 @@ public class GatewayProxyController {
     private final CuratorFramework curatorClient;
     private final RestTemplate restTemplate = new RestTemplate();
 
+    @Value("${TRIMLINK_NODE_SCHEME:http}")
+    private String nodeScheme;
+
+    @Value("${TRIMLINK_NODE_PORT:8080}")
+    private String nodePort;
+
+    @Value("${TRIMLINK_GATEWAY_STATIC_NODES:}")
+    private String staticNodesCsv;
+
     private final AtomicInteger roundRobinCounter = new AtomicInteger(0);
 
-    public GatewayProxyController(CuratorFramework curatorClient) {
-        this.curatorClient = curatorClient;
+    public GatewayProxyController(ObjectProvider<CuratorFramework> curatorClientProvider) {
+        this.curatorClient = curatorClientProvider.getIfAvailable();
     }
 
     @PostMapping("/shorten")
     public ResponseEntity<String> proxyShortenRequest(@RequestParam String longUrl) {
         try {
-            String nodesDirectoryPath = "/registry/nodes";
-            List<String> activeContainerHosts = curatorClient.getChildren().forPath(nodesDirectoryPath);
+            List<String> activeContainerHosts = resolveActiveNodes();
 
             if (activeContainerHosts == null || activeContainerHosts.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
@@ -37,7 +50,7 @@ public class GatewayProxyController {
             int targetingIndex = Math.abs(currentSequenceValue) % activeContainerHosts.size();
             String assignedHost = activeContainerHosts.get(targetingIndex);
 
-            String proxyDestinationUrl = "http://" + assignedHost + ":8080/internal/shorten?longUrl=" + longUrl;
+            String proxyDestinationUrl = nodeScheme + "://" + assignedHost + ":" + nodePort + "/internal/shorten?longUrl=" + longUrl;
 
             System.out.printf("[GATEWAY BALANCER] Dispatched shortening sequence #%d to target container -> %s%n",
                     currentSequenceValue, proxyDestinationUrl);
@@ -56,7 +69,7 @@ public class GatewayProxyController {
         try {
             // Read lookups follow the same dynamic round-robin sequence to completely
             // spread execution load
-            List<String> activeContainerHosts = curatorClient.getChildren().forPath("/registry/nodes");
+            List<String> activeContainerHosts = resolveActiveNodes();
             if (activeContainerHosts == null || activeContainerHosts.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
             }
@@ -65,7 +78,7 @@ public class GatewayProxyController {
             int targetingIndex = Math.abs(currentSequenceValue) % activeContainerHosts.size();
             String assignedHost = activeContainerHosts.get(targetingIndex);
 
-            String proxyDestinationUrl = "http://" + assignedHost + ":8080/internal/resolve/" + shortCode;
+            String proxyDestinationUrl = nodeScheme + "://" + assignedHost + ":" + nodePort + "/internal/resolve/" + shortCode;
 
             // Forward the lookup query to the selected node
             return restTemplate.getForEntity(proxyDestinationUrl, Void.class);
@@ -73,5 +86,20 @@ public class GatewayProxyController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+    }
+
+    private List<String> resolveActiveNodes() throws Exception {
+        if (staticNodesCsv != null && !staticNodesCsv.isBlank()) {
+            return Arrays.stream(staticNodesCsv.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isBlank())
+                    .collect(Collectors.toList());
+        }
+
+        if (curatorClient != null) {
+            return curatorClient.getChildren().forPath("/registry/nodes");
+        }
+
+        return Collections.emptyList();
     }
 }

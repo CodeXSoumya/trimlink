@@ -3,10 +3,14 @@ package com.codex.trimlink.node.kgs;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.shared.SharedCount;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
 
 @Component
+@ConditionalOnBean(CuratorFramework.class)
+@ConditionalOnProperty(name = "trimlink.kgs.provider", havingValue = "zookeeper", matchIfMissing = true)
 public class ZookeeperRangeKgsClient implements KeyRangeProvider {
 
     private final long blockSize = 1000;
