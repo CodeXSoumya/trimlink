@@ -100,6 +100,8 @@ npm install
 npm run dev
 ```
 
+Note: during `npm run dev`, Vite proxies `/api/*` requests to `http://localhost:8080`, so keep backend gateway running.
+
 Production frontend build:
 
 ```bash
@@ -165,7 +167,7 @@ Recommended testing split:
 
 ## Performance Optimizations
 
-2. **Read-Path Optimization: Look-Aside Caching Performance**
+### Read-Path Optimization: Look-Aside Caching Performance**
 
 Read‑path optimizations were evaluated using the native `curl.exe` binary timing hooks targeting the live distributed hash token **qA**. This captures the performance delta between physical sharded database lookups and open‑socket Redis memory hits.
 
@@ -174,11 +176,7 @@ Read‑path optimizations were evaluated using the native `curl.exe` binary timi
 Pass 1 | Cache Miss (DB Shard Link) | qA | 187.26 ms | Baseline
 Pass 2 | Cache Hit (Pooled Redis RAM) | qA | 49.54 ms | 🚀 **73.5 % Latency Reduction**
 
-**Structural Observations**
+#### Structural Observations
 
 The look‑aside cache pattern successfully intercepts heavy read volumes before hitting the persistence layer. By establishing Lettuce‑managed connection‑pooling bounds (`max‑active=64, max‑idle=16`), the node cluster successfully minimizes connection‑lifecycle penalties across the virtualized container network bridge.
 
-### Resolution Path & Edge Case Analysis
-
-The `/api/v1/resolve/{token}` endpoint was validated again
-*(End of Performance Optimizations section)*
