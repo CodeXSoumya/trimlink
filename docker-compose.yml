@@ -120,3 +120,17 @@ services:
     <<: *node-template
   node-5:
     <<: *node-template
+
+  # ==========================================
+  # WEB UI: React Frontend served by Nginx
+  # ==========================================
+  trimlink-frontend:
+    build:
+      context: ./frontend
+    container_name: trimlink-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+    networks:
+      - trimlink-network

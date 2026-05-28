@@ -48,6 +48,14 @@ logs/
 *.swp
 *.crash
 
+### Frontend ###
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
 ### Docker Local Environments ###
 .env
 .env*.local

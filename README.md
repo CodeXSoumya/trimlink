@@ -1,68 +1,172 @@
-# TrimLink: High-Concurrency Distributed URL Shortener
+# TrimLink
 
-TrimLink is a production-grade, highly available, fault-tolerant distributed URL shortener designed to handle massive concurrent write and read traffic. Built using a multi-node Spring Boot cluster orchestrated inside Docker, the system implements core distributed systems concepts—including Consistent Hashing, Sliding Window Rate Limiting, a Centralized Distributed Key Generation Service (KGS), and multi-tier Cache-Aside persistence.
+Distributed URL shortener built with Spring Boot, ZooKeeper, Redis, and Postgres shards.
 
-### Key Architectural Patterns Implemented:
-* **API Gateway & Layer-7 Routing:** Acts as the cluster single-entry point. Protects backend infrastructure via a custom custom **Sliding Window Rate Limiter** and proxies requests dynamically.
-* **Consistent Hashing (Murmur3):** Eliminates hot-spotting. The gateway maps destination long URLs across a virtual token ring containing 10 separate application node containers, ensuring static data partitioning.
-* **Centralized Key Generation Service (KGS):** Solves the multi-node sequence collision problem. Nodes communicate with an **Apache ZooKeeper Quorum Cluster** via Apache Curator to atomically lease block ranges (e.g., blocks of 1,000 IDs) using distributed Compare-And-Swap (CAS) transactions. 
-* **High Performance Read Path (Cache-Aside):** Shortened token expansion achieves sub-millisecond response latency by leveraging an automated L1 **Redis Cache Lookup Layer** before falling back to the persistent L2 database row.
-* **Base62 Numeric Bijective Encoding:** Database-generated integer sequence identifiers are compressed mathematically into compact, short alphanumeric strings `[a-zA-Z0-9]`.
+This README is intentionally aligned with the current implementation in this repository.
 
----
+## Current State At A Glance
 
-## 🛠️ Tech Stack & Infrastructure Components
-* **Core Framework:** Spring Boot 3.x (Java 17)
-* **Distributed Coordinator:** Apache ZooKeeper 3.9 (via Apache Curator)
-* **High-Speed Cache Engine:** Redis 7 (Alpine Distribution)
-* **Persistent Datastore:** PostgreSQL 15 Relational Engine
-* **Containerization Engine:** Docker & Docker Compose
+1. Single deployable Spring Boot application runs in two profiles:
+1. gateway profile: API ingress, rate limiting, and proxying to app nodes.
+1. default profile: app node behavior, node discovery registration, KGS-backed ID leasing.
+1. Cluster topology from docker-compose:
+1. 1 gateway
+1. 5 app nodes
+1. 1 Redis
+1. 3 Postgres shards
+1. 1 ZooKeeper
 
----
+Detailed architecture is documented in docs/current-state-architecture.md.
 
-## 🏃‍♂️ Local Verification & Stress Testing Workbook
+## Tech Stack
 
-Follow these steps to build, run, and stress-test the entire distributed architecture infrastructure locally on your machine.
+1. Java 17
+1. Spring Boot 3.2.5
+1. React 18 + Vite + TypeScript
+1. Spring Data JPA
+1. Spring Data Redis
+1. Apache Curator (ZooKeeper client)
+1. PostgreSQL 15
+1. Redis 7
+1. Docker and Docker Compose
 
-### 1. Build and Boot the Cluster
-From your project root directory containing the `docker-compose.yml` file, run:
+## Public API
 
+Gateway listens on port 8080.
+
+1. Create short code
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/shorten?longUrl=https://example.com" -H "X-Client-ID: developer_1"
 ```
-docker-compose up --build
+
+Expected: 200 OK with short code body.
+
+1. Resolve short code through gateway proxy path
+
+```bash
+curl -i "http://localhost:8080/api/v1/resolve/<shortCode>"
 ```
 
-Watch the logs to see PostgreSQL initialize, ZooKeeper open its coordination socket, and all 10 application nodes boot up simultaneously.
+Expected: 302 Found with Location header.
 
-### 2. Verify the Write Path (URL Shortening)
-Execute an HTTP POST request passing a client ID tracking header to target the gateway:
+1. Alternate direct redirect path available in current code
 
+```bash
+curl -i "http://localhost:8080/api/v1/<shortCode>"
 ```
-curl.exe -X POST "http://localhost:8080/api/v1/shorten?longUrl=https://github.com/CodeXSoumya/" -H "X-Client-ID: developer_1"
+
+Expected: 302 Found when mapping exists, 404 otherwise.
+
+## Run Locally With Docker
+
+```bash
+docker compose up --build
 ```
 
-Expected Response: A Base62 shortcode token like b or c.
-Check your main terminal window to witness the gateway hash the string and route it to a specific node, which seamlessly leases an ID block from ZooKeeper.
+Frontend URL:
 
-### 3. Verify the Read Path (302 Redirection)
-Query the gateway resolve endpoint to expand the short token:
+```text
+http://localhost:3000
 ```
-curl.exe -v "http://localhost:8080/internal/resolve/b"
-```
-Expected Response: An HTTP 200 Found with header pointing dynamically back to Google Maps.
 
-### 4. Verify Rate Limiter Layer Under Attack
-Simulate a rapid denial-of-service burst of 12 requests in under 10 seconds:
+Backend gateway URL:
 
+```text
+http://localhost:8080
 ```
-for ($i = 1; $i -le 12; $i++) {
-     curl.exe -s -w "`nResponse Code: %{http_code}`n" `
-          -X POST "http://localhost:8080/api/v1/shorten?longUrl=https://test$i.com" `
-          -H "X-Client-ID: attacker_user"
+
+Stop:
+
+```bash
+docker compose down
+```
+
+## Frontend Module
+
+Frontend source lives in frontend and is production-ready with:
+
+1. React + TypeScript + Vite build pipeline
+1. Route handling and 404 fallback
+1. Input validation (react-hook-form + zod)
+1. API client with stable X-Client-ID identity header
+1. Dockerized Nginx static serving and gateway API proxy
+
+Local frontend-only run (if Node is available):
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Production frontend build:
+
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+## Rate Limiter Behavior
+
+Gateway profile wires RedisSlidingWindowRateLimiter with current limits:
+
+1. Window: 60 seconds
+1. Max requests: 100 per client
+1. Client identity: X-Client-ID header (falls back to remote IP)
+
+Quick burst test:
+
+```powershell
+for ($i = 1; $i -le 110; $i++) {
+     curl.exe -s -o NUL -w "%{http_code}`n" -X POST "http://localhost:8080/api/v1/shorten?longUrl=https://loadtest$i.com" -H "X-Client-ID: attacker_user"
 }
 ```
-Expected Response: The first 5 requests process successfully, and then the gateway immediately severs the connection returning Too Many Requests: Try again later (Response Code: 429), protecting the internal compute cluster from resource starvation.
 
-### 5. Tear Down Cluster Memory
-```
-docker-compose down
-```
+## Development On Company Laptop Without Java Or Docker
+
+You can still develop productively by using remote/CI validation.
+
+1. Keep coding locally (editor only).
+1. Push frequently to a branch.
+1. Use GitHub Actions for build, test, and integration checks in cloud runners.
+1. Review logs and artifacts from CI for feedback.
+1. Optionally use a free cloud dev environment (GitHub Codespaces monthly free quota for personal account tiers that include it, or Gitpod alternatives) when full runtime testing is needed.
+
+Recommended testing split:
+
+1. Unit tests for pure logic classes (Base62, hashing, rate limiter logic).
+1. Integration tests for persistence and Redis behavior using Testcontainers in CI.
+1. End-to-end smoke test using docker compose in CI.
+
+## Pull Request CI Pipeline
+
+GitHub Actions workflow is available at .github/workflows/pr-ci.yml and runs on every pull request to main/master.
+
+Stages:
+
+1. Frontend job
+1. npm ci
+1. npm run lint
+1. npm run build
+
+1. Backend job
+1. Maven test
+1. Maven package
+
+1. Compose smoke job
+1. docker compose up --build
+1. frontend availability check on port 3000
+1. backend shorten and resolve smoke flow verification
+1. logs on failure and teardown
+
+PR feedback:
+
+1. Workflow automatically posts (and updates) a single sticky PR comment with stage status:
+1. frontend
+1. backend
+1. smoke
+1. Direct link to the workflow run is included for quick triage.
+
+This ensures that merged code is always in a deployable state.

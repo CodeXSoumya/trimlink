@@ -1,0 +1,281 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: "IBM Plex Sans", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 85% 10%, rgba(15, 122, 106, 0.2), transparent 28%),
+    radial-gradient(circle at 20% 90%, rgba(224, 166, 63, 0.2), transparent 33%),
+    linear-gradient(150deg, var(--bg), var(--bg-alt));
+}
+
+h1,
+h2,
+h3,
+.brandName {
+  font-family: "Space Grotesk", sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.appFrame {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+.topNav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid var(--stroke);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 0.8rem 1rem;
+}
+
+.brandWrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.brandDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 100%;
+  background: linear-gradient(135deg, var(--accent), #e0a63f);
+}
+
+.brandName {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.brandSub {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.navLink {
+  color: var(--accent-strong);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.hero {
+  margin: 1.25rem 0;
+  padding: 1.4rem;
+  border-radius: 18px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(6px);
+}
+
+.hero h1 {
+  margin: 0.2rem 0;
+  font-size: clamp(1.6rem, 4vw, 2.6rem);
+}
+
+.hero p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.gridLayout {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 1rem;
+}
+
+.stack {
+  margin-top: 1.2rem;
+}
+
+.stack h2 {
+  margin-top: 0;
+}
+
+.card {
+  border-radius: 18px;
+  border: 1px solid var(--stroke);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+}
+
+.cardHeader h2 {
+  margin: 0;
+}
+
+.cardHeader p {
+  margin-top: 0.4rem;
+  color: var(--text-muted);
+}
+
+.formGrid {
+  display: grid;
+  gap: 0.55rem;
+}
+
+label {
+  font-weight: 600;
+}
+
+input {
+  font: inherit;
+  width: 100%;
+  padding: 0.72rem 0.85rem;
+  border-radius: 11px;
+  border: 1px solid var(--stroke);
+  outline: none;
+}
+
+input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(15, 122, 106, 0.15);
+}
+
+.primaryButton,
+.ghostButton {
+  font: inherit;
+  font-weight: 600;
+  border-radius: 11px;
+  border: 1px solid transparent;
+  padding: 0.65rem 0.95rem;
+  cursor: pointer;
+  transition: transform 120ms ease, opacity 120ms ease, background-color 120ms ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.primaryButton {
+  color: #f5fffd;
+  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+}
+
+.ghostButton {
+  color: var(--text);
+  border-color: var(--stroke);
+  background: transparent;
+}
+
+.primaryButton:hover,
+.ghostButton:hover {
+  transform: translateY(-1px);
+}
+
+.primaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.inputError,
+.apiError {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--danger);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.linkCard {
+  border: 1px solid var(--stroke);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.linkCard h3 {
+  margin: 0.1rem 0;
+  font-size: 1.5rem;
+}
+
+.linkCard a {
+  word-break: break-all;
+}
+
+.linkCardActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.historyGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-size: 0.77rem;
+  font-weight: 700;
+}
+
+.notFoundWrap {
+  max-width: 680px;
+  margin: 4.5rem auto;
+  text-align: center;
+  border-radius: 16px;
+  border: 1px solid var(--stroke);
+  box-shadow: var(--shadow);
+  background: var(--surface);
+  padding: 2.2rem;
+}
+
+.reveal {
+  animation: revealIn 450ms ease both;
+}
+
+@keyframes revealIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 900px) {
+  .gridLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .historyGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .linkCard {
+    flex-direction: column;
+  }
+
+  .linkCardActions {
+    flex-direction: row;
+  }
+}
