@@ -30,9 +30,24 @@ public class UrlRedirectController {
 
         System.out.printf("[REDIRECT SUCCESS] Redirecting [%s] -> %s%n", shortCode, targetLongUrl);
 
+        String redirectUrl = normalizeRedirectUrl(targetLongUrl);
+
         // HTTP 302 Found to redirect the browser client
         return ResponseEntity.status(HttpStatus.FOUND)
-                .location(URI.create(targetLongUrl))
+                .location(URI.create(redirectUrl))
                 .build();
+    }
+
+    private String normalizeRedirectUrl(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String trimmed = value.trim();
+        if (trimmed.matches("^[a-zA-Z][a-zA-Z\\d+\\-.]*://.*")) {
+            return trimmed;
+        }
+
+        return "https://" + trimmed;
     }
 }
