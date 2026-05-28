@@ -126,29 +126,50 @@ for ($i = 1; $i -le 110; $i++) {
 
 ## Development On Company Laptop Without Java Or Docker
 
-You can still develop productively with an editor-first workflow and occasional remote runtime access.
+You can still develop productively by using remote/CI validation.
 
 1. Keep coding locally (editor only).
 1. Push frequently to a branch.
-1. Use a free cloud dev environment (GitHub Codespaces monthly free quota for personal account tiers that include it, or Gitpod alternatives) when full runtime testing is needed.
-1. Validate core flows with curl smoke tests against a running environment.
+1. Use GitHub Actions for build, test, and integration checks in cloud runners.
+1. Review logs and artifacts from CI for feedback.
+1. Optionally use a free cloud dev environment (GitHub Codespaces monthly free quota for personal account tiers that include it, or Gitpod alternatives) when full runtime testing is needed.
 
 Recommended testing split:
 
 1. Unit tests for pure logic classes (Base62, hashing, rate limiter logic).
-1. Integration tests for persistence and Redis behavior using Testcontainers.
-1. End-to-end smoke test using docker compose.
+1. Integration tests for persistence and Redis behavior using Testcontainers in CI.
+1. End-to-end smoke test using docker compose in CI.
 
-## Free-Tier Distributed Deployment
+## Production Readiness Plan (Next Milestones)
 
-A step-by-step guide for deploying the full distributed architecture (gateway, app node(s), ZooKeeper, Redis, and 3 Postgres shards) is available at [docs/free-tier-distributed-deployment.md](docs/free-tier-distributed-deployment.md).
+1. Documentation parity: keep README and architecture docs synchronized with code behavior.
+1. Security hardening:
+1. move secrets to environment variables and secret manager
+1. remove hardcoded credentials
+1. add auth for internal endpoints
+1. Reliability:
+1. add health checks for gateway and node services
+1. add retry/backoff and circuit-breaker around inter-node calls
+1. remove recursive retry in cache-miss path and replace with bounded loop
+1. Observability:
+1. add structured logging, trace IDs, and metrics (Micrometer + Prometheus)
+1. Testing:
+1. meaningful unit and integration coverage
+1. smoke tests on each PR
+1. Deployment:
+1. CI/CD pipeline to container registry and target platform
 
-Environment variable template for cloud secrets is available at [.env.free-tier.example](.env.free-tier.example).
+## Free Web Deployment Options
 
-Fly.io role-based templates are available at [deploy/fly/node.fly.toml](deploy/fly/node.fly.toml) and [deploy/fly/gateway.fly.toml](deploy/fly/gateway.fly.toml).
+For true multi-service distributed deployment, fully free options are limited. Most providers now have usage caps or sleep behavior. Practical options:
 
-For Valkey-first deployment without ZooKeeper, set:
+1. Best practical low-cost/free-start path:
+1. Deploy app services on Render free web services or Fly.io trial credits
+1. Use Neon free Postgres for initial stage
+1. Use Upstash free Redis
+1. Replace ZooKeeper in internet-facing free tier by moving KGS to DB-sequence strategy (recommended for first public release)
+1. Alternative:
+1. Keep distributed architecture for local and CI validation
+1. Deploy a simplified single-node production profile publicly for free tier hosting
 
-1. `TRIMLINK_ZOOKEEPER_ENABLED=false`
-2. `TRIMLINK_KGS_PROVIDER=redis`
-3. `TRIMLINK_GATEWAY_STATIC_NODES=<comma-separated-app-node-hosts>`
+If you want, next step can be adding CI workflows and a production profile so you can ship from your company laptop with zero local Java/Docker.
