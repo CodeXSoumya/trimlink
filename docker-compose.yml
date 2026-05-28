@@ -3,30 +3,19 @@ networks:
     driver: bridge
 
 services:
-  # ================================================
-  # 1. CORE STORAGE: Relational DB (Source of Truth)
-  # ================================================
-  postgres-db:
-    image: postgres:15-alpine
-    container_name: postgres-db
-    environment:
-      POSTGRES_DB: shortener_db
-      POSTGRES_USER: postgres_user
-      POSTGRES_PASSWORD: secure_db_password
+  # ==========================================
+  # COORDINATOR: Apache ZooKeeper
+  # ==========================================
+  zookeeper-service:
+    image: zookeeper:3.9.0
+    container_name: zookeeper-service
     ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/postgres_data
+      - "2181:2181"
     networks:
       - trimlink-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres_user -d shortener_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-  
+
   # ==========================================
-  # 2. CACHE LAYER: Centralized Redis Cache
+  # L1 HIGH-SPEED CACHE: Redis
   # ==========================================
   redis-cache:
     image: redis:7-alpine
@@ -41,145 +30,93 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-  
-  # ===========================================================
-  # 3. CENTRAL COORDINATOR: Apache ZooKeeper (KGS Orchestrator)
-  # ===========================================================
-  zookeeper:
-    image: zookeeper:3.9.0
-    container_name: zookeeper-service
-    ports:
-      - "2181:2181"
-    networks:
-      - trimlink-network
-    environment:
-      ZOO_MY_ID: 1
 
   # ==========================================
-  # 4. ROUTING LAYER: The API Gateway
+  # L2 STORAGE TIER: 3 Independent DB Shards
+  # ==========================================
+  postgres-shard-0:
+    image: postgres:15-alpine
+    container_name: postgres-shard-0
+    environment:
+      POSTGRES_DB: trimlink_db
+      POSTGRES_USER: postgres_user
+      POSTGRES_PASSWORD: secure_db_password
+    ports:
+      - "5433:5432"
+    networks:
+      - trimlink-network
+
+  postgres-shard-1:
+    image: postgres:15-alpine
+    container_name: postgres-shard-1
+    environment:
+      POSTGRES_DB: trimlink_db
+      POSTGRES_USER: postgres_user
+      POSTGRES_PASSWORD: secure_db_password
+    ports:
+      - "5434:5432"
+    networks:
+      - trimlink-network
+
+  postgres-shard-2:
+    image: postgres:15-alpine
+    container_name: postgres-shard-2
+    environment:
+      POSTGRES_DB: trimlink_db
+      POSTGRES_USER: postgres_user
+      POSTGRES_PASSWORD: secure_db_password
+    ports:
+      - "5435:5432"
+    networks:
+      - trimlink-network
+
+  # ==========================================
+  # ENTRY EDGE ROUTER: API Gateway
   # ==========================================
   api-gateway:
     build: .
     container_name: api-gateway
     ports:
-      - "8080:8080" # Gateway's Tomcat port to the host machine
+      - "8080:8080"
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/shortener_db
-      - SPRING_DATA_REDIS_HOST=redis-cache
-      - SPRING_DATA_REDIS_POST=6373
-      - HOSTNAME=api-gateway
+      - SPRING_PROFILES_ACTIVE=gateway
       - ZOOKEEPER_SERVER=zookeeper-service:2181
     depends_on:
-      postgres-db:
-        condition: service_healthy
-      redis-cache:
-        condition: service_healthy
+      - zookeeper-service
     networks:
       - trimlink-network
-  
-  # =============================================
-  # 5. COMPUTE PARTITIONS: 10 Isolated App Nodes
-  # =============================================
+
+  # ==========================================
+  # COMPUTE FLOCK: 5 Active Processing Nodes
+  # ==========================================
   node-1: &node-template
     build: .
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/shortener_db
+      - SPRING_PROFILES_ACTIVE=default
       - SPRING_DATA_REDIS_HOST=redis-cache
-      - SPRING_DATA_REDIS_POST=6373
-      - HOSTNAME=node-1
+      - SPRING_DATA_REDIS_PORT=6373
       - ZOOKEEPER_SERVER=zookeeper-service:2181
+      - DB_USERNAME=postgres_user
+      - DB_PASSWORD=secure_db_password
     depends_on:
-      postgres-db:
-        condition: service_healthy
+      zookeeper-service:
+        condition: service_started
       redis-cache:
         condition: service_healthy
+      postgres-shard-0:
+        condition: service_started
+      postgres-shard-1:
+        condition: service_started
+      postgres-shard-2:
+        condition: service_started
     networks:
       - trimlink-network
-  
+
   node-2:
     <<: *node-template
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/shortener_db
-      - SPRING_DATA_REDIS_HOST=redis-cache
-      - SPRING_DATA_REDIS_POST=6373
-      - HOSTNAME=node-2
-      - ZOOKEEPER_SERVER=zookeeper-service:2181
-
   node-3:
     <<: *node-template
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/shortener_db
-      - SPRING_DATA_REDIS_HOST=redis-cache
-      - SPRING_DATA_REDIS_POST=6373
-      - HOSTNAME=node-3
-      - ZOOKEEPER_SERVER=zookeeper-service:2181
-
   node-4:
     <<: *node-template
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/shortener_db
-      - SPRING_DATA_REDIS_HOST=redis-cache
-      - SPRING_DATA_REDIS_POST=6373
-      - HOSTNAME=node-4
-      - ZOOKEEPER_SERVER=zookeeper-service:2181
-
   node-5:
     <<: *node-template
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/shortener_db
-      - SPRING_DATA_REDIS_HOST=redis-cache
-      - SPRING_DATA_REDIS_POST=6373
-      - HOSTNAME=node-5
-      - ZOOKEEPER_SERVER=zookeeper-service:2181
-
-  node-6:
-    <<: *node-template
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/shortener_db
-      - SPRING_DATA_REDIS_HOST=redis-cache
-      - SPRING_DATA_REDIS_POST=6373
-      - HOSTNAME=node-6
-      - ZOOKEEPER_SERVER=zookeeper-service:2181
-
-  node-7:
-    <<: *node-template
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/shortener_db
-      - SPRING_DATA_REDIS_HOST=redis-cache
-      - SPRING_DATA_REDIS_POST=6373
-      - HOSTNAME=node-7
-      - ZOOKEEPER_SERVER=zookeeper-service:2181
-  
-  node-8:
-    <<: *node-template
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/shortener_db
-      - SPRING_DATA_REDIS_HOST=redis-cache
-      - SPRING_DATA_REDIS_POST=6373
-      - HOSTNAME=node-8
-      - ZOOKEEPER_SERVER=zookeeper-service:2181
-
-  node-9:
-    <<: *node-template
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/shortener_db
-      - SPRING_DATA_REDIS_HOST=redis-cache
-      - SPRING_DATA_REDIS_POST=6373
-      - HOSTNAME=node-9
-      - ZOOKEEPER_SERVER=zookeeper-service:2181
-
-  node-10:
-    <<: *node-template
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/shortener_db
-      - SPRING_DATA_REDIS_HOST=redis-cache
-      - SPRING_DATA_REDIS_POST=6373
-      - HOSTNAME=node-10
-      - ZOOKEEPER_SERVER=zookeeper-service:2181
-
-volumes:
-  postgres_data:
-  
-  
-
-  

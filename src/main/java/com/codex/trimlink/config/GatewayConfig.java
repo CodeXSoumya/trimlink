@@ -1,28 +1,42 @@
 package com.codex.trimlink.config;
 
-import java.util.Arrays;
-
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
-import com.codex.trimlink.rateLimit.*;
-import com.codex.trimlink.hashing.*;
+import org.springframework.data.redis.core.StringRedisTemplate;
+
+import com.codex.trimlink.gateway.RateLimitingFilter;
+import com.codex.trimlink.rateLimit.RedisSlidingWindowRateLimiter;
+import com.codex.trimlink.rateLimit.RateLimiter;
 
 @Configuration
+@Profile("gateway") // Ensures this entire config file ONLY initializes on the API Gateway
 public class GatewayConfig {
-    
+
     @Bean
-    public RateLimiter rateLimiter() {
-        // Global limit: 5 requests per minute
-        return new InMemorySlidingWindowRateLimiter(60000, 5);
+    public RateLimiter rateLimiter(StringRedisTemplate redisTemplate) {
+        // Global limit: 100 requests per minute using clustered Redis rate limiting
+        System.out.println("[GATEWAY CONFIG] Initializing Redis-based sliding window rate limiter (100 req/min).");
+        return new RedisSlidingWindowRateLimiter(redisTemplate, 60000, 100);
     }
 
     @Bean
-    public ConsistentHashingStrategy hashingStrategy() {
-        // 200 virtual nodes for better distribution across 10 real nodes
-        return new Murmur3Strategy(200, Arrays.asList(
-            "node-1", "node-2", "node-3", "node-4", "node-5",
-            "node-6", "node-7", "node-8", "node-9", "node-10"
-        ));
+    public FilterRegistrationBean<RateLimitingFilter> loggingFilter(RateLimiter rateLimiter) {
+        FilterRegistrationBean<RateLimitingFilter> registrationBean = new FilterRegistrationBean<>();
+
+        // Explicitly instantiate and wire the filter with the gateway's rate limiter
+        // bean
+        registrationBean.setFilter(new RateLimitingFilter(rateLimiter));
+
+        // Apply this filter exclusively to the public API ingress path routes
+        registrationBean.addUrlPatterns("/api/v1/*");
+
+        // Ensure it executes at the very front of the request chain pipeline
+        registrationBean.setOrder(1);
+
+        System.out.println("[GATEWAY CONFIG] RateLimitingFilter successfully attached to API edge ingress path.");
+        return registrationBean;
     }
 }
