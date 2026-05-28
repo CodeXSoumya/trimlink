@@ -3,11 +3,15 @@ package com.codex.trimlink.node.storage;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
 public class UrlStorageService {
+
+    private static final Logger log = LoggerFactory.getLogger(UrlStorageService.class);
 
     private final UrlMappingRepository dbMappingRepository;
     private final StringRedisTemplate redisTemplate;
@@ -35,15 +39,28 @@ public class UrlStorageService {
             ShardContext.clear();
         }
 
-        // Write to Cache: Warm-up (Global shared cache layer across nodes)
-        redisTemplate.opsForValue().set(shortCode, longUrl, 24, TimeUnit.HOURS);
+        // Cache warm-up is best-effort. DB is the source of truth and should not fail due
+        // to transient cache issues.
+        try {
+            redisTemplate.opsForValue().set(shortCode, longUrl, 24, TimeUnit.HOURS);
+        } catch (Exception e) {
+            log.warn("[CACHE WRITE SKIPPED] Failed to warm cache for shortCode={}. Cause: {}", shortCode,
+                    e.getMessage());
+        }
     }
 
     public String getLongUrl(String shortCode) {
-        // Query the ultra-fast RAM Cache
-        String cachedData = redisTemplate.opsForValue().get(shortCode);
-        if (cachedData != null) { // Cache HIT
-            return cachedData;
+        String cachedData = null;
+        try {
+            // Query the ultra-fast RAM Cache
+            cachedData = redisTemplate.opsForValue().get(shortCode);
+            if (cachedData != null) { // Cache HIT
+                return cachedData;
+            }
+        } catch (Exception e) {
+            log.warn("[CACHE READ SKIPPED] Redis unavailable for shortCode={}. Falling back to DB. Cause: {}",
+                    shortCode, e.getMessage());
+            return readFromDbAndOptionallyPopulateCache(shortCode, false);
         }
 
         // Cache MISS! -> Fall back to the persistent Relational Database
@@ -52,7 +69,14 @@ public class UrlStorageService {
         // threads try to fetch the same short code that is not in cache
         String lockKey = "lock:" + shortCode;
         // Attempt to acquire the lock with a timeout to prevent deadlocks
-        Boolean lockAcquired = redisTemplate.opsForValue().setIfAbsent(lockKey, "locked", 10, TimeUnit.SECONDS);
+        Boolean lockAcquired;
+        try {
+            lockAcquired = redisTemplate.opsForValue().setIfAbsent(lockKey, "locked", 10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.warn("[CACHE LOCK SKIPPED] Failed to acquire Redis lock for shortCode={}. Falling back to DB. Cause: {}",
+                    shortCode, e.getMessage());
+            return readFromDbAndOptionallyPopulateCache(shortCode, false);
+        }
 
         // If lock is acquired, this thread is responsible for fetching from DB and
         // updating cache.
@@ -60,47 +84,73 @@ public class UrlStorageService {
             try {
                 // Double-checked locking style: If a thread has already fetched the long url
                 // and saved in cache subsequently
-                cachedData = redisTemplate.opsForValue().get(shortCode);
+                try {
+                    cachedData = redisTemplate.opsForValue().get(shortCode);
+                } catch (Exception e) {
+                    log.warn("[CACHE DOUBLE-CHECK SKIPPED] Redis read failed for shortCode={}. Cause: {}", shortCode,
+                            e.getMessage());
+                }
                 if (cachedData != null)
                     return cachedData;
 
-                String longUrl;
-                try {
-                    // CRITICAL STEP: Bind this worker thread context to the specific database shard
-                    // signature
-                    ShardContext.setShardKey(shortCode);
-
-                    // CRITICAL SECTION: Only one thread should make the call to the Persistent DB
-                    // Shard
-                    Optional<UrlMapping> dbMapping = dbMappingRepository.findByShortCode(shortCode);
-                    if (!dbMapping.isPresent()) {
-                        return null; // No long url found!!!
-                    }
-                    longUrl = dbMapping.get().getLongUrl();
-
-                } finally {
-                    // Safely clean up thread local map context state right after data mapping
-                    // retrieval
-                    ShardContext.clear();
-                }
-
-                // Save in Cache -> for sub-ms fetch for the next 24 hours if queried
-                redisTemplate.opsForValue().set(shortCode, longUrl, 24, TimeUnit.HOURS);
-                // TTL(Cache Invalidation): 24 hours to keep Redis clean from dead URLs
-
-                return longUrl;
+                return readFromDbAndOptionallyPopulateCache(shortCode, true);
             } finally {
                 // Release the lock so that other threads can fetch from DB if needed
-                redisTemplate.delete(lockKey);
+                try {
+                    redisTemplate.delete(lockKey);
+                } catch (Exception e) {
+                    log.warn("[CACHE LOCK RELEASE SKIPPED] Failed to release lock for shortCode={}. Cause: {}",
+                            shortCode, e.getMessage());
+                }
             }
         } else { // Otherwise some other thread is already fetching the long url and updating
                  // cache, so we wait for a short duration and then try fetching from cache again
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+            for (int attempt = 0; attempt < 5; attempt++) {
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+
+                try {
+                    cachedData = redisTemplate.opsForValue().get(shortCode);
+                    if (cachedData != null) {
+                        return cachedData;
+                    }
+                } catch (Exception e) {
+                    log.warn("[CACHE RETRY SKIPPED] Redis retry read failed for shortCode={}. Cause: {}", shortCode,
+                            e.getMessage());
+                    break;
+                }
             }
-            return getLongUrl(shortCode); // Retry fetching from cache after some delay
+
+            return readFromDbAndOptionallyPopulateCache(shortCode, false);
         }
+    }
+
+    private String readFromDbAndOptionallyPopulateCache(String shortCode, boolean populateCache) {
+        String longUrl;
+        try {
+            ShardContext.setShardKey(shortCode);
+            Optional<UrlMapping> dbMapping = dbMappingRepository.findByShortCode(shortCode);
+            if (!dbMapping.isPresent()) {
+                return null;
+            }
+            longUrl = dbMapping.get().getLongUrl();
+        } finally {
+            ShardContext.clear();
+        }
+
+        if (populateCache) {
+            try {
+                redisTemplate.opsForValue().set(shortCode, longUrl, 24, TimeUnit.HOURS);
+            } catch (Exception e) {
+                log.warn("[CACHE POPULATE SKIPPED] Failed to cache shortCode={}. Cause: {}", shortCode,
+                        e.getMessage());
+            }
+        }
+
+        return longUrl;
     }
 }

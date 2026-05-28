@@ -61,10 +61,25 @@ public class AppNodeController {
         }
 
         System.out.printf("[NODE READ] Node [%s] lookup is successful. [%s] redirects to [%s]", nodeName, shortCode, targetLongUrl);
+
+        String redirectUrl = normalizeRedirectUrl(targetLongUrl);
         
         // HTTP 302 Found (Temporary Redirect) to send the browser to the long URL
         return ResponseEntity.status(HttpStatus.FOUND)
-                .location(URI.create(targetLongUrl))
+                .location(URI.create(redirectUrl))
                 .build();
+    }
+
+    private String normalizeRedirectUrl(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String trimmed = value.trim();
+        if (trimmed.matches("^[a-zA-Z][a-zA-Z\\d+\\-.]*://.*")) {
+            return trimmed;
+        }
+
+        return "https://" + trimmed;
     }
 }
