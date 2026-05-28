@@ -1,13 +1,9 @@
 package com.codex.trimlink;
 
-import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
-@SpringBootTest(properties = {
-    "spring.datasource.url=jdbc:h2:mem:testdb",
-    "zookeeper.connectionString=localhost:2181",
-    "spring.data.redis.host=localhost"
-})
+@SpringBootTest
+@ActiveProfiles("test")
 class TrimlinkApplicationTests {
 
 	@Test
