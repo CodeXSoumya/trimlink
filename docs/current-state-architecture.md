@@ -15,7 +15,7 @@ The same Spring Boot artifact runs in two profiles.
 1. Handles internal shorten/resolve operations.
 1. Leases unique ID ranges from ZooKeeper shared counter.
 
-## Deployed Components
+## Runtime Components
 
 Current docker-compose topology:
 
@@ -158,6 +158,11 @@ Public and internal endpoints in current code:
 1. Secrets and DB credentials are hardcoded in several places.
 1. Cache-miss wait path uses recursion and should be bounded iterative retry.
 1. Internal endpoints are not authenticated.
+
+## Scope Note
+
+1. This repository currently targets backend + frontend development and local/CI validation.
+1. Internet deployment artifacts are out of scope for the current project state.
 
 ## Production-Readiness Priorities
 

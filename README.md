@@ -140,7 +140,7 @@ Recommended testing split:
 1. Integration tests for persistence and Redis behavior using Testcontainers in CI.
 1. End-to-end smoke test using docker compose in CI.
 
-## Production Readiness Plan (Next Milestones)
+## Production Readiness Plan (Local Development Scope)
 
 1. Documentation parity: keep README and architecture docs synchronized with code behavior.
 1. Security hardening:
@@ -156,20 +156,9 @@ Recommended testing split:
 1. Testing:
 1. meaningful unit and integration coverage
 1. smoke tests on each PR
-1. Deployment:
-1. CI/CD pipeline to container registry and target platform
 
-## Free Web Deployment Options
+## Current Project Scope
 
-For true multi-service distributed deployment, fully free options are limited. Most providers now have usage caps or sleep behavior. Practical options:
-
-1. Best practical low-cost/free-start path:
-1. Deploy app services on Render free web services or Fly.io trial credits
-1. Use Neon free Postgres for initial stage
-1. Use Upstash free Redis
-1. Replace ZooKeeper in internet-facing free tier by moving KGS to DB-sequence strategy (recommended for first public release)
-1. Alternative:
-1. Keep distributed architecture for local and CI validation
-1. Deploy a simplified single-node production profile publicly for free tier hosting
-
-If you want, next step can be adding CI workflows and a production profile so you can ship from your company laptop with zero local Java/Docker.
+1. Backend + frontend development only.
+1. Local verification and CI validation only.
+1. No web deployment configuration is currently targeted.
